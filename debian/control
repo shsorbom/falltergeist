@@ -3,7 +3,7 @@ Section: unknown
 Priority: optional
 Maintainer: Shawn Sörbom <shawn@sorbom.com>
 Build-Depends: debhelper (>= 9), cmake, libsdl2-dev, libsdl2-mixer-dev, libsdl2-image-dev, libglew-dev, libglm-dev, zlib1g-dev
-Standards-Version: 3.9.5
+Standards-Version: 3.9.6
 Homepage: https://falltergeist.org/
 Vcs-Git: https://github.com/shsorbom/falltergeist.git
 Vcs-Browser: https://github.com/shsorbom/falltergeist.git
@@ -14,4 +14,4 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Open Source Fallout 2 game engine
  Falltergeist is an Open Source Fallout 2 game engine written in C++ and SDL
  .
- It requires the original master.dat and critter.dat files from the original Fallout 2 game
+ It requires the original "master.dat" and "critter.dat" files from the original Fallout 2 game
