@@ -1,5 +1,5 @@
 Source: falltergeist
-Section: unknown
+Section: contrib/games
 Priority: optional
 Maintainer: Shawn Sörbom <shawn@sorbom.com>
 Build-Depends: debhelper (>= 9), cmake, libsdl2-dev, libsdl2-mixer-dev, libsdl2-image-dev, libglew-dev, libglm-dev, zlib1g-dev
