@@ -8,7 +8,7 @@ Homepage: https://falltergeist.org/
 Vcs-Git: https://github.com/shsorbom/falltergeist.git
 Vcs-Browser: https://github.com/shsorbom/falltergeist.git
 
-Package: faltergeist
+Package: falltergeist
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Open Source Fallout 2 game engine
