@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2012-2015 Falltergeist developers
@@ -32,6 +32,7 @@
 #include <cstdlib>
 
 // Falltergeist includes
+#include "../../Format/Dat/Stream.h"
 #include "Unpacker.h"
 
 // Third party includes
@@ -106,7 +107,7 @@ inline void ValueUnpacker::_prepareBits(int bits)
         unsigned char one_byte;
         if (_bufferBitOffset == UNPACKER_BUFFER_SIZE)
         {
-            unsigned long remains = stream->bytesRemains();
+            auto remains = stream->bytesRemains();
             if (remains > UNPACKER_BUFFER_SIZE)
                 remains = UNPACKER_BUFFER_SIZE;
             _bufferBitOffset = UNPACKER_BUFFER_SIZE - remains;
@@ -542,7 +543,7 @@ int ValueUnpacker::t3_7bits(int pass, int /*ind*/)
     return 1;
 }
 
-ValueUnpacker::ValueUnpacker(int levCnt, int sbCount, Dat::Item *stream)
+ValueUnpacker::ValueUnpacker(int levCnt, int sbCount, Dat::Stream *stream)
 {
     _levels = levCnt;
     _subblocks = sbCount;
@@ -563,6 +564,15 @@ ValueUnpacker::~ValueUnpacker()
         free(_ampBuffer);
         _ampBuffer = nullptr;
     }
+}
+
+void ValueUnpacker::reset()
+{
+    _nextBits = 0;
+    _availBits = 0;
+    _bufferBitOffset = UNPACKER_BUFFER_SIZE;
+    _buffMiddle = _ampBuffer + 0x8000;
+    _blockPtr = nullptr;
 }
 
 }

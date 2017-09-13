@@ -43,6 +43,7 @@ namespace Mve
 namespace UI
 {
 
+// MVE Movie Player
 class MvePlayer : public Falltergeist::UI::Base
 {
 public:
@@ -54,11 +55,12 @@ public:
     bool finished();
     uint32_t getAudio(uint8_t* data, uint32_t len);
     uint32_t samplesLeft();
+    // Current frame number
     uint32_t frame();
 
 private:
     Format::Mve::File* _mve = nullptr;
-    std::shared_ptr<Format::Mve::Chunk> _chunk;
+    std::unique_ptr<Format::Mve::Chunk> _chunk;
 
     Graphics::Movie* _movie;
 

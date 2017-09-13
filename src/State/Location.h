@@ -23,6 +23,8 @@
 // C++ standard includes
 #include <list>
 #include <memory>
+#include <Game/DudeObject.h>
+#include <Format/Map/File.h>
 
 // Falltergeist includes
 #include "../Game/Object.h"
@@ -36,8 +38,16 @@
 
 namespace Falltergeist
 {
+    namespace Format
+    {
+        namespace Map
+        {
+            class Object;
+        }
+    }
     namespace Game
     {
+        class Location;
         class Object;
         class SpatialObject;
     }
@@ -84,6 +94,9 @@ namespace Falltergeist
 
                 HexagonGrid* hexagonGrid();
                 LocationCamera* camera();
+
+                std::shared_ptr<Falltergeist::Game::Location> location();
+                void setLocation(std::shared_ptr<Falltergeist::Game::Location> location);
 
                 void setMVAR(unsigned int number, int value);
                 int MVAR(unsigned int number);
@@ -158,6 +171,7 @@ namespace Falltergeist
                 std::map<std::string, VM::StackValue> _EVARS;
                 std::vector<UI::Base*> _floatMessages;
 
+                std::shared_ptr<Falltergeist::Game::Location> _location;
                 bool _locationEnter = true;
                 unsigned int _currentElevation = 0;
                 unsigned int _currentMap = 0;
@@ -185,6 +199,42 @@ namespace Falltergeist
                 Falltergeist::Graphics::Lightmap* _lightmap;
 
                 std::vector<std::unique_ptr<Game::SpatialObject>> _spatials;
+
+            void initializePlayerTestAppareance(Falltergeist::Game::DudeObject *player) const;
+
+            void initializeLightmap();
+
+            Game::Object* createObjectFromMapObject(const std::unique_ptr<Falltergeist::Format::Map::Object> &mapObject) const;
+
+            void loadSpatialScripts(const Falltergeist::Format::Map::File *mapFile);
+
+            void loadFloorAndRoof(const Format::Map::File *mapFile);
+
+            void loadLocationScript(const Format::Map::File *mapFile);
+
+            void loadAmbient(const std::string &name);
+
+            void loadDude(const Format::Map::File *mapFile);
+
+            void loadObjects(const Format::Map::File *mapFile);
+
+            void renderCursor() const;
+
+            void renderObjects() const;
+
+            void renderCursorOutline() const;
+
+            void renderTestingOutline() const;
+
+            void thinkObjects() const;
+
+            void performScrolling();
+
+            void firstLocationEnter() const;
+
+            void updateLocation();
+
+            void processTimers();
         };
     }
 }

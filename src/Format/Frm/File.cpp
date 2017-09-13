@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2012-2015 Falltergeist developers
@@ -27,7 +27,7 @@
 
 // Falltergeist includes
 #include "../Enums.h"
-#include "../Frm/Direction.h"
+#include "../Dat/Stream.h"
 #include "../Frm/File.h"
 #include "../Frm/Frame.h"
 #include "../Pal/File.h"
@@ -42,85 +42,59 @@ namespace Format
 namespace Frm
 {
 
-File::File(Dat::Entry* datFileEntry) : Dat::Item(datFileEntry)
+File::File(Dat::Stream&& stream)
 {
-    _initialize();
-}
+    stream.setPosition(0);
 
-File::File(std::ifstream * stream) : Dat::Item(stream)
-{
-    _initialize();
-}
-
-File::~File()
-{
-    for (auto direction : _directions)
-    {
-        delete direction;
-    }
-    delete [] _rgba;
-}
-
-void File::_initialize()
-{
-    if (_initialized) return;
-    Dat::Item::_initialize();
-    Dat::Item::setPosition(0);
-
-    _version = uint32();
-    _framesPerSecond = uint16();
-    _actionFrame = uint16();
-    _framesPerDirection = uint16();
+    _version = stream.uint32();
+    _framesPerSecond = stream.uint16();
+    _actionFrame = stream.uint16();
+    _framesPerDirection = stream.uint16();
 
     uint16_t shiftX[6];
     uint16_t shiftY[6];
     uint32_t dataOffset[6];
-    for (unsigned int i = 0; i != 6; ++i) shiftX[i] = uint16();
-    for (unsigned int i = 0; i != 6; ++i) shiftY[i] = uint16();
+    for (unsigned int i = 0; i != 6; ++i) shiftX[i] = stream.uint16();
+    for (unsigned int i = 0; i != 6; ++i) shiftY[i] = stream.uint16();
     for (unsigned int i = 0; i != 6; ++i)
     {
-        dataOffset[i] = uint32();
+        dataOffset[i] = stream.uint32();
         if (i > 0 && dataOffset[i-1] == dataOffset[i])
         {
             continue;
         }
 
-        auto direction = new Direction();
-        direction->setDataOffset(dataOffset[i]);
-        direction->setShiftX(shiftX[i]);
-        direction->setShiftY(shiftY[i]);
-        _directions.push_back(direction);
+        _directions.emplace_back();
+        auto& direction = _directions.back();
+        direction.setDataOffset(dataOffset[i]);
+        direction.setShiftX(shiftX[i]);
+        direction.setShiftY(shiftY[i]);
     }
 
     // for each direction
-    for (auto direction : _directions)
+    for (auto& direction : _directions)
     {
         // jump to frames data at frames area
-        Dat::Item::setPosition(direction->dataOffset() + 62);
+        stream.setPosition(direction.dataOffset() + 62);
 
         // read all frames
         for (unsigned i = 0; i != _framesPerDirection; ++i)
         {            
-            uint16_t width = uint16();
-            uint16_t height = uint16();
-            auto frame = new Frame(width, height);
+            uint16_t width = stream.uint16();
+            uint16_t height = stream.uint16();
+
+            direction.frames().emplace_back(width, height);
+            auto& frame = direction.frames().back();
 
             // Number of pixels for this frame
             // We don't need this, because we already have width*height
-            uint32();
+            stream.uint32();
 
-            frame->setOffsetX(int16());
-            frame->setOffsetY(int16());
+            frame.setOffsetX(stream.int16());
+            frame.setOffsetY(stream.int16());
 
             // Pixels data
-            for (unsigned y = 0; y != frame->height(); ++y)
-            {
-                for (unsigned x = 0; x != frame->width(); ++x)
-                {
-                    frame->setIndex(x, y, uint8());
-                }
-            }
-            direction->frames()->push_back(frame);
+            stream.readBytes(frame.data(), frame.width() * frame.height());
         }
     }
 }
@@ -145,62 +119,64 @@ uint16_t File::actionFrame() const
     return _actionFrame;
 }
 
-std::vector<Direction*>* File::directions()
+const std::vector<Direction>& File::directions() const
 {
-    return &_directions;
+    return _directions;
 }
 
 uint16_t File::width() const
 {
-    std::vector<uint16_t> widths;
-    for (auto direction : _directions)
+    return std::max_element(_directions.begin(), _directions.end(), [](const Direction& a, const Direction& b)
     {
-        widths.push_back(direction->width());
-    }
-    return *std::max_element(widths.begin(), widths.end());
+        return a.width() < b.width(); 
+    })->width();
 }
 
 uint16_t File::height() const
 {
     uint16_t height = 0;
-
-    for (auto direction : _directions)
+    for (auto& direction : _directions)
     {
-        height += direction->height();
+        height += direction.height();
     }
     return height;
 }
 
 uint32_t* File::rgba(Pal::File* palFile)
 {
-    if (_rgba) return _rgba;
-    _rgba = new uint32_t[width()*height()]();
+    // TODO: this looks like a getter, which in fact creates _rgba.
+    // Moreover, the content of _rgba depends on the specific palFile that was provided the first time
+    // This is clearly bad semantics
+    if (!_rgba.empty()) return _rgba.data();
+
+    _rgba.resize(width()*height());
 
     uint16_t w = width();
 
-    unsigned positionY = 1;
-    for (auto direction : _directions)
+    size_t positionY = 1;
+    for (auto& direction : _directions)
     {
-        unsigned positionX = 1;
-        for (auto frame : *direction->frames())
+        size_t positionX = 1;
+        for (auto& frame : direction.frames())
         {
-            for (unsigned y = 0; y != frame->height(); ++y)
+            // TODO: more efficient way to generate texture?
+            for (uint16_t y = 0; y != frame.height(); ++y)
             {
-                for (unsigned x = 0; x != frame->width(); ++x)
+                for (uint16_t x = 0; x != frame.width(); ++x)
                 {
-                    _rgba[((y + positionY)*w) + x + positionX] = *palFile->color(frame->index(x, y));
+                    _rgba[((y + positionY)*w) + x + positionX] = *palFile->color(frame.index(x, y));
                 }
             }
-            positionX += frame->width()+2;
+            positionX += frame.width() + 2;
         }
-        positionY += direction->height();
+        positionY += direction.height();
     }
-    return _rgba;
+    return _rgba.data();
 }
 
-std::vector<bool>* File::mask(Pal::File* palFile)
+std::vector<bool>& File::mask(Pal::File* palFile)
 {
-    if (!_mask.empty()) return &_mask;
+    if (!_mask.empty()) return _mask;
 
     uint16_t w = width();
     uint16_t h = height();
@@ -208,35 +184,36 @@ std::vector<bool>* File::mask(Pal::File* palFile)
     _mask.resize(w*h, true);
 
     unsigned positionY = 1;
-    for (auto direction : _directions)
+    for (auto& direction : _directions)
     {
         unsigned positionX = 1;
-        for (auto frame : *direction->frames())
+        for (auto& frame : direction.frames())
         {
-            for (unsigned y = 0; y != frame->height(); ++y)
+            // TODO: optimize
+            for (unsigned y = 0; y != frame.height(); ++y)
             {
-                for (unsigned x = 0; x != frame->width(); ++x)
+                for (unsigned x = 0; x != frame.width(); ++x)
                 {
-                    _mask[((y + positionY)*w) + x + positionX] = (palFile->color(frame->index(x, y))->alpha() > 0);
+                    _mask[((y + positionY)*w) + x + positionX] = (palFile->color(frame.index(x, y))->alpha() > 0);
                 }
             }
-            positionX += frame->width()+2;
+            positionX += frame.width() + 2;
         }
-        positionY += direction->height();
+        positionY += direction.height();
     }
-    return &_mask;
+    return _mask;
 }
 
 int16_t File::offsetX(unsigned int direction, unsigned int frame) const
 {
     if (direction >= _directions.size()) direction = 0;
-    return _directions.at(direction)->frames()->at(frame)->offsetX();
+    return _directions.at(direction).frames().at(frame).offsetX();
 }
 
 int16_t File::offsetY(unsigned int direction, unsigned int frame) const
 {
     if (direction >= _directions.size()) direction = 0;
-    return _directions.at(direction)->frames()->at(frame)->offsetY();
+    return _directions.at(direction).frames().at(frame).offsetY();
 }
 
 }

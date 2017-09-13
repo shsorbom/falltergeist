@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2012-2015 Falltergeist developers
@@ -30,6 +30,7 @@
 
 // Falltergeist includes
 #include "../../Format/Dat/Item.h"
+#include "../../Format/Msg/Message.h"
 
 // Third party includes
 
@@ -37,25 +38,23 @@ namespace Falltergeist
 {
 namespace Format
 {
+namespace Dat
+{
+class Stream;
+}
+
 namespace Msg
 {
 
-class Message;
-
 class File : public Dat::Item
 {
-
 public:
-    File(Dat::Entry* datFileEntry);
-    File(std::ifstream* stream);
-    ~File();
+    File(Dat::Stream&& stream);
 
-    std::vector<Message*>* messages();
     Message* message(unsigned int number);
 
-protected:
-    std::vector<Message*> _messages;
-    virtual void _initialize();
+private:
+    std::vector<Message> _messages;
 
 };
 

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2012-2015 Falltergeist developers
@@ -30,6 +30,7 @@
 #include "../../Exception.h"
 #include "../../Format/Msg/File.h"
 #include "../../Format/Msg/Message.h"
+#include "../../Format/Dat/Stream.h"
 
 // Third party includes
 
@@ -40,38 +41,18 @@ namespace Format
 namespace Msg
 {
 
-File::File(Dat::Entry* datFileEntry) : Dat::Item(datFileEntry)
+File::File(Dat::Stream&& stream)
 {
-    _initialize();
-}
-
-File::File(std::ifstream* stream) : Dat::Item(stream)
-{
-    _initialize();
-}
-
-File::~File()
-{
-    for (auto message : _messages)
-    {
-        delete message;
-    }
-}
-
-void File::_initialize()
-{
-    if (_initialized) return;
-    Dat::Item::_initialize();
-    Dat::Item::setPosition(0);
+    stream.setPosition(0);
 
     /*
      * Because of bug in CMBATAI2.MSG in messages #1382 and #32020 we need to explode each line with '{' symbol
      * Any extra '}' symbols must be trimed from exploded parts
      */
 
-    while (this->position() < this->size())
+    while (stream.position() < stream.size())
     {
-        uint8_t chr = uint8();
+        uint8_t chr = stream.uint8();
         if (chr == '{')
         {
             std::string number;
@@ -81,7 +62,7 @@ void File::_initialize()
             // number
             while (chr != '{')
             {
-                chr = uint8();
+                chr = stream.uint8();
                 if (chr != '{' && chr != '}')
                 {
                     number += chr;
@@ -92,7 +73,7 @@ void File::_initialize()
             chr = 0;
             while (chr != '{')
             {
-                chr = uint8();
+                chr = stream.uint8();
                 if (chr != '{' && chr != '}')
                 {
                     sound += chr;
@@ -101,9 +82,9 @@ void File::_initialize()
 
             chr = 0;
             // text
-            while (chr != '}' && chr != '{' && this->position() < this->size())
+            while (chr != '}' && chr != '{' && stream.position() < stream.size())
             {
-                chr = uint8();
+                chr = stream.uint8();
                 if (chr != '{' && chr != '}')
                 {
                     text += chr;
@@ -111,7 +92,7 @@ void File::_initialize()
             }
 
             // "put back" last character
-            this->setPosition(this->position() - 1);
+            stream.setPosition(stream.position() - 1);
 
             while (text.find("\n") != std::string::npos)
             {
@@ -122,27 +103,22 @@ void File::_initialize()
                 text.replace(text.find("\r"), 1, "");
             }
 
-            auto message = new Message();
-            message->setNumber(std::stoi(number));
-            message->setSound(sound);
-            message->setText(text);
+            Message message;
+            message.setNumber(std::stoi(number));
+            message.setSound(sound);
+            message.setText(text);
             _messages.push_back(message);
         }
     }
 }
 
-std::vector<Message*>* File::messages()
-{
-    return &_messages;
-}
-
 Message* File::message(unsigned int number)
 {
-    for (auto message : _messages)
+    for (auto& message : _messages)
     {
-        if (message->number() == number)
+        if (message.number() == number)
         {
-            return message;
+            return &message;
         }
     }
     throw Exception("File::message() - number is out of range: " + std::to_string(number));

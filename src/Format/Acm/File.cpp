@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2012-2015 Falltergeist developers
@@ -45,138 +45,80 @@ namespace Format
 namespace Acm
 {
 
-File::File(Dat::Entry* datFileEntry) : Dat::Item(datFileEntry)
-{
-    _initialize();
-}
+constexpr int HEADER_SIZE = 14;
 
-File::File(std::ifstream* stream) : Dat::Item(stream)
+File::File(Dat::Stream&& stream) : _stream(std::move(stream))
 {
-    _initialize();
+    _stream.setPosition(0);
+    _stream.setEndianness(ENDIANNESS::LITTLE);
+    _samplesReady = 0;
+
+    Header hdr;
+    _stream >> hdr.signature;
+    _stream >> hdr.samples;
+    _stream >> hdr.channels;
+    _stream >> hdr.rate;
+
+    int16_t tmpword;
+    _stream.readBytes((uint8_t*)&tmpword, 2);
+    _subblocks = (int32_t) (tmpword >> 4);
+    _levels = (int32_t) (tmpword&15);
+
+    if (hdr.signature != IP_ACM_SIG)
+    {
+        throw Exception("Not an ACM file - invalid signature");
+    }
+
+    _samplesLeft = _samples = hdr.samples;
+    _channels = hdr.channels;
+    _bitrate = hdr.rate;
+    _blockSize = ( 1 << _levels) * _subblocks;
+
+    _block.resize(_blockSize);
+
+    _unpacker = std::make_unique<ValueUnpacker>(_levels, _subblocks, &_stream);
+    if (!_unpacker || !_unpacker->init())
+    {
+        throw Exception("Cannot create or init unpacker");
+    }
+    _decoder = std::make_unique<Decoder>(_levels);
+    if (!_decoder || !_decoder->init())
+    {
+        throw Exception("Cannot create or init decoder");
+    }
 }
 
 File::~File()
 {
-    if (_block != nullptr)
-    {
-        free(_block);
-        _block = nullptr;
-    }
-}
-
-void File::_initialize()
-{
-    if (_initialized) return;
-    Dat::Item::_initialize();
-    Dat::Item::setPosition(0);
-
-    this->setEndianness(ENDIANNESS::LITTLE);
-    _samplesReady=0;
-
-    Header hdr;
-    *this >> hdr.signature;
-    *this >> hdr.samples;
-    *this >> hdr.channels;
-    *this >> hdr.rate;
-
-    int16_t tmpword;
-    readBytes((uint8_t*)&tmpword, 2);
-    _subblocks = (int32_t) (tmpword >> 4);
-    _levels = (int32_t) (tmpword&15);
-
-    if (hdr.signature != IP_ACM_SIG)
-    {
-        throw Exception("Not an ACM file - invalid signature");
-    }
-
-    _samplesLeft = ( _samples = hdr.samples );
-    _channels = hdr.channels;
-    _bitrate = hdr.rate;
-    _blockSize = ( 1 << _levels) * _subblocks;
-
-    _block = (int32_t *) malloc(sizeof(int32_t)* _blockSize);
-
-    _unpacker = std::shared_ptr<ValueUnpacker>(new ValueUnpacker(_levels, _subblocks, this));
-    if (!_unpacker || !_unpacker->init())
-    {
-        throw Exception("Cannot create or init unpacker");
-    }
-    _decoder = std::shared_ptr<Decoder>(new Decoder(_levels));
-    if (!_decoder || !_decoder->init())
-    {
-        throw Exception("Cannot create or init decoder");
-    }
-}
-
-void File::init()
-{
-    _initialize();
 }
 
 void File::rewind()
 {
-    Dat::Item::setPosition(0);
-    _samplesReady=0;
-
-    Header hdr;
-    *this >> hdr.signature;
-    *this >> hdr.samples;
-    *this >> hdr.channels;
-    *this >> hdr.rate;
-
-    int16_t tmpword;
-    readBytes((uint8_t*)&tmpword, 2);
-    _subblocks = (int32_t) (tmpword >> 4);
-    _levels = (int32_t) (tmpword&15);
-
-    if (hdr.signature != IP_ACM_SIG)
-    {
-        throw Exception("Not an ACM file - invalid signature");
-    }
-
-    _samplesLeft = ( _samples = hdr.samples );
-    _channels = hdr.channels;
-    _bitrate = hdr.rate;
-    _blockSize = ( 1 << _levels) * _subblocks;
-
-    if (_block != nullptr)
-    {
-        free(_block);
-        _block = nullptr;
-    }
-    _block = (int32_t *) malloc(sizeof(int32_t)* _blockSize);
-
-
-    _unpacker = std::shared_ptr<ValueUnpacker>(new ValueUnpacker(_levels, _subblocks, this));
-    if (!_unpacker || !_unpacker->init())
-    {
-        throw Exception("Cannot create or init unpacker");
-    }
-    _decoder = std::shared_ptr<Decoder>(new Decoder(_levels));
-    if (!_decoder || !_decoder->init())
-    {
-        throw Exception("Cannot create or init decoder");
-    }
+    _stream.setPosition(HEADER_SIZE);
+    _samplesReady = 0;
+    _samplesLeft = _samples;
+    _unpacker->reset();
 }
-
 
 int32_t File::_makeNewSamples()
 {
-    if (!_unpacker->getOneBlock(_block))
+    // TODO: maybe use fixed-size ints in Unpacker?
+    if (!_unpacker->getOneBlock(reinterpret_cast<int*>(_block.data())))
     {
         // FIXME: is it an error or the end of the stream?
         return 0;
     }
-    _decoder->decodeData(_block, _subblocks);
-    _values = _block;
+    // TODO: maybe use fixed-size ints in Decoder?
+    _decoder->decodeData(reinterpret_cast<int*>(_block.data()), _subblocks);
+    _values = _block.data();
     _samplesReady = ( _blockSize > _samplesLeft) ? _samplesLeft : _blockSize;
     _samplesLeft -= _samplesReady;
     return 1;
 }
 
-int32_t File::readSamples(short* buffer, int32_t count)
+size_t File::readSamples(uint16_t* buffer, size_t count)
 {
-    int32_t res = 0;
+    size_t res = 0;
     while (res < count) {
         if (_samplesReady == 0) {
             if (_samplesLeft == 0)
@@ -184,7 +126,7 @@ int32_t File::readSamples(short* buffer, int32_t count)
             if (!_makeNewSamples())
                 break;
         }
-        *buffer = ( short ) ( ( *_values) >> _levels);
+        *buffer = ( short ) ( (*_values) >> _levels);
         _values++;
         buffer++;
         res += 1;

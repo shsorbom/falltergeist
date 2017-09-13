@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2012-2015 Falltergeist developers
@@ -42,6 +42,11 @@ namespace Falltergeist
 {
 namespace Format
 {
+namespace Dat
+{
+class Stream;
+}
+
 namespace Acm
 {
 
@@ -50,7 +55,7 @@ class ValueUnpacker
 
 public:
 
-    ValueUnpacker(int levCnt, int sbCount, Dat::Item *stream);
+    ValueUnpacker(int levCnt, int sbCount, Dat::Stream* stream);
     virtual ~ValueUnpacker();
 
     // These functions are used to fill the buffer with the amplitude values
@@ -70,17 +75,18 @@ public:
     int t3_7bits(int pass, int ind);
 
     int init();
+    void reset();
     int getOneBlock(int *block);
 
 protected:
     // Parameters of ACM stream
     int _levels, _subblocks;
-    Dat::Item *stream;
+    Dat::Stream *stream;
     // Bits
     unsigned int _nextBits; // new bits
     int _availBits; // count of new bits
     unsigned char _bitsBuffer[UNPACKER_BUFFER_SIZE];
-    unsigned int _bufferBitOffset;
+    size_t _bufferBitOffset;
 
     int _sbSize;
     short *_ampBuffer, *_buffMiddle;

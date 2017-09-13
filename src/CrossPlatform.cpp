@@ -436,7 +436,7 @@ std::vector<std::string> CrossPlatform::getDataPaths()
     if (maybeDataHome == nullptr || *maybeDataHome == '\0')
         _dataPaths.push_back(getHomeDirectory() + "/.local/share/falltergeist");
     else
-        _dataPaths.push_back(std::string(maybeDataHome) + "/falltergiest");
+        _dataPaths.push_back(std::string(maybeDataHome) + "/falltergeist");
 
     std::string sharedir = getExecutableDirectory()+"/../share/falltergeist";
 
@@ -461,10 +461,10 @@ uint32_t CrossPlatform::microtime()
     }
 
     uint64_t time = mach_absolute_time();
-    return ((double)time * (double)timebase.numer) / ((double)timebase.denom);
+    return static_cast<uint32_t>(((double)time * (double)timebase.numer) / ((double)timebase.denom));
 #elif defined(_WIN32) || defined(WIN32)
     auto now = std::chrono::high_resolution_clock::now();
-    return std::chrono::time_point_cast<std::chrono::nanoseconds>(now).time_since_epoch().count();
+    return static_cast<uint32_t>(std::chrono::time_point_cast<std::chrono::nanoseconds>(now).time_since_epoch().count());
 #else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);

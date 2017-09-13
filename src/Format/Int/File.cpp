@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2012-2015 Falltergeist developers
@@ -25,6 +25,7 @@
 // C++ standard includes
 
 // Falltergeist includes
+#include "../../Format/Dat/Stream.h"
 #include "../../Format/Int/File.h"
 #include "../../Format/Int/Procedure.h"
 #include "../../Exception.h"
@@ -38,93 +39,72 @@ namespace Format
 namespace Int
 {
 
-File::File(Dat::Entry* datFileEntry) : Dat::Item(datFileEntry)
+File::File(Dat::Stream&& stream) : _stream(std::move(stream))
 {
-    _initialize();
-}
-
-File::File(std::ifstream* stream) : Dat::Item(stream)
-{
-    _initialize();
-}
-
-File::~File()
-{
-    for (auto procedure : _procedures)
-    {
-        delete procedure;
-    }
-}
-
-void File::_initialize()
-{
-    if (_initialized) return;
-    Dat::Item::_initialize();
-    Dat::Item::setPosition(0);
+    _stream.setPosition(0);
 
     // Initialization code goes here
-    setPosition(42);
+    _stream.setPosition(42);
 
     // Procedures table
-    uint32_t proceduresCount = uint32();
+    uint32_t proceduresCount = _stream.uint32();
 
     std::vector<uint32_t> procedureNameOffsets;
 
     for (unsigned i = 0; i != proceduresCount; ++i)
     {
-        auto procedure = new Procedure();
+        _procedures.emplace_back();
+        auto& procedure = _procedures.back();
 
-        procedureNameOffsets.push_back(uint32());
-        procedure->setFlags(uint32());
-        procedure->setDelay(uint32());
-        procedure->setConditionOffset(uint32());
-        procedure->setBodyOffset(uint32());
-        procedure->setArgumentsCounter(uint32());
-
-        _procedures.push_back(procedure);
+        procedureNameOffsets.push_back(_stream.uint32());
+        procedure.setFlags(_stream.uint32());
+        procedure.setDelay(_stream.uint32());
+        procedure.setConditionOffset(_stream.uint32());
+        procedure.setBodyOffset(_stream.uint32());
+        procedure.setArgumentsCounter(_stream.uint32());
     }
 
-    // Identificators table
-    uint32_t tableSize = uint32();
+    // Identifiers table
+    uint32_t tableSize = _stream.uint32();
     unsigned j = 0;
     while (j < tableSize)
     {
-        uint16_t nameLength = uint16();
+        uint16_t nameLength = _stream.uint16();
         j += 2;
 
         uint32_t nameOffset = j + 4;
         std::string name;
         for (unsigned i = 0; i != nameLength; ++i, ++j)
         {
-            uint8_t ch = uint8();
+            uint8_t ch = _stream.uint8();
             if (ch != 0) name.push_back(ch);
         }
 
         _identifiers.insert(std::make_pair(nameOffset, name)); // names of functions and variables
     }
 
-    this->skipBytes(4); // signature 0xFFFFFFFF
+    _stream.skipBytes(4); // signature 0xFFFFFFFF
 
     for (unsigned i = 0; i != procedureNameOffsets.size(); ++i)
     {
-        _procedures.at(i)->setName(_identifiers.at(procedureNameOffsets.at(i)));
+        _procedures.at(i).setName(_identifiers.at(procedureNameOffsets.at(i)));
     }
 
     // STRINGS TABLE
-    uint32_t stringsTable = uint32();
+    uint32_t stringsTable = _stream.uint32();
 
     if (stringsTable != 0xFFFFFFFF)
     {
         uint32_t j = 0;
         while (j < stringsTable)
         {
-            uint16_t length = uint16();
+            uint16_t length = _stream.uint16();
             j += 2;
             uint32_t nameOffset = j + 4;
             std::string name;
             for (unsigned i = 0; i != length; ++i, ++j)
             {
-                uint8_t ch = uint8();
+                uint8_t ch = _stream.uint8();
                 if (ch != 0) name.push_back(ch);
             }
             _strings.insert(std::make_pair(nameOffset, name));
@@ -132,31 +112,56 @@ void File::_initialize()
     }
 }
 
-std::map<unsigned int, std::string>* File::identifiers()
+const std::map<unsigned int, std::string>& File::identifiers() const
 {
-    return &_identifiers;
+    return _identifiers;
 }
 
-std::map<unsigned int, std::string>* File::strings()
+const std::map<unsigned int, std::string>& File::strings() const
 {
-    return &_strings;
+    return _strings;
 }
 
-std::vector<Procedure*>* File::procedures()
+size_t File::position() const
 {
-    return &_procedures;
+    return _stream.position();
 }
 
-Procedure* File::procedure(std::string name)
+void File::setPosition(size_t pos)
 {
-    for (auto procedure : _procedures)
+    _stream.setPosition(pos);
+}
+
+size_t File::size() const
+{
+    return _stream.size();
+}
+
+uint16_t File::readOpcode()
+{
+    return _stream.uint16();
+}
+
+uint32_t File::readValue()
+{
+    return _stream.uint32();
+}
+
+const std::vector<Procedure>& File::procedures() const
+{
+    return _procedures;
+}
+
+const Procedure* File::procedure(const std::string& name) const
+{
+    for (auto& procedure : _procedures)
     {
-        if (procedure->name() == name)
+        if (procedure.name() == name)
         {
-            return procedure;
+            return &procedure;
         }
     }
-    return 0;
+    return nullptr;
 }
 
 }

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright 2012-2016 Falltergeist Developers.
  *
  * This file is part of Falltergeist.
@@ -57,19 +57,22 @@ Animation::Animation(const std::string& frmName, unsigned int direction) : Fallt
 {
     _direction = direction;
     auto frm = ResourceManager::getInstance()->frmFileType(frmName);
-    _animation = std::make_unique<Graphics::Animation>(frmName);
+    if (frm == nullptr) {
+        return;
+    }
 
+    _animation = std::make_unique<Graphics::Animation>(frmName);
     _actionFrame = frm->actionFrame();
-    auto dir = frm->directions()->at(direction);
-    _shift = Point(dir->shiftX(), dir->shiftY());
+    auto& dir = frm->directions().at(direction);
+    _shift = Point(dir.shiftX(), dir.shiftY());
 
     // Frame offset in texture's animation
-    unsigned int x = 0;
-    unsigned int y = 0;
+    int x = 0;
+    int y = 0;
 
     for (unsigned int d = 0; d != direction; ++d)
     {
-        y += frm->directions()->at(d)->height(); //? может i - 1
+        y += frm->directions().at(d).height(); //? может i - 1
     }
 
     int xOffset = 1;
@@ -80,10 +83,10 @@ Animation::Animation(const std::string& frmName, unsigned int direction) : Fallt
         yOffset += frm->offsetY(direction, f);
 
         auto frame = std::make_unique<AnimationFrame>();
-        auto srcFrame = frm->directions()->at(direction)->frames()->at(f);
-        frame->setSize(Size(srcFrame->width(), srcFrame->height()));
-        frame->setOffset({xOffset, yOffset});
-        frame->setPosition(Point(x, y));
+        auto& srcFrame = frm->directions().at(direction).frames().at(f);
+        frame->setSize({ srcFrame.width(), srcFrame.height() });
+        frame->setOffset({ xOffset, yOffset });
+        frame->setPosition({ x, y });
 
         auto fps = frm->framesPerSecond();
         if (fps == 0)
@@ -113,18 +116,22 @@ std::vector<std::unique_ptr<AnimationFrame>>& Animation::frames()
 
 void Animation::think()
 {
-    if (!_playing) return;
+    if (!_animation) {
+        return;
+    }
+    if (!_playing) {
+        return;
+    }
 
     // TODO: handle cases when main loop FPS is lower than animation FPS
-    if (SDL_GetTicks() - _frameTicks >= _animationFrames.at(_currentFrame)->duration())
-    {
+    if (SDL_GetTicks() - _frameTicks >= _animationFrames.at(_currentFrame)->duration()) {
         _frameTicks = SDL_GetTicks();
 
         _progress += 1;
-        
+
         if (_progress < _animationFrames.size())
         {
-            _currentFrame = _reverse ? _animationFrames.size() - _progress - 1 : _progress;
+            _currentFrame = _reverse ? static_cast<unsigned>(_animationFrames.size()) - _progress - 1 : _progress;
             emitEvent(std::make_unique<Event::Event>("frame"), frameHandler());
             if (_actionFrame == _currentFrame)
             {
@@ -142,6 +149,9 @@ void Animation::think()
 
 void Animation::render(bool eggTransparency)
 {
+    if (!_animation) {
+        return;
+    }
     auto& frame = _animationFrames.at(_currentFrame);
     Point offsetPosition = position() + shift() + frame->offset();
     _animation->trans(_trans);
@@ -151,6 +161,10 @@ void Animation::render(bool eggTransparency)
 
 Size Animation::size() const
 {
+    if (!_animation) {
+        Size size;
+        return size;
+    }
     return _animationFrames.at(_currentFrame)->size();
 }
 
@@ -166,8 +180,7 @@ void Animation::setShift(const Point& value)
 
 void Animation::play()
 {
-    if (!_playing)
-    {
+    if (!_playing) {
         _playing = true;
         _ended = false;
         _frameTicks = SDL_GetTicks();
@@ -185,7 +198,7 @@ void Animation::stop()
 void Animation::setReverse(bool value)
 {
     _reverse = value;
-    setCurrentFrame(value ? _animationFrames.size()-1 : 0);
+    setCurrentFrame(value ? static_cast<unsigned>(_animationFrames.size()) - 1 : 0);
 }
 
 bool Animation::ended() const
@@ -206,7 +219,7 @@ unsigned int Animation::currentFrame() const
 void Animation::setCurrentFrame(unsigned int value)
 {
     _currentFrame = value;
-    _progress = _reverse ? _animationFrames.size() - _currentFrame - 1 : _currentFrame;
+    _progress = _reverse ? static_cast<unsigned>(_animationFrames.size()) - _currentFrame - 1 : _currentFrame;
 }
 
 AnimationFrame* Animation::currentFramePtr() const
@@ -250,11 +263,13 @@ Event::Handler& Animation::animationEndedHandler()
 }
 
 bool Animation::opaque(const Point &pos) {
+    if (!_animation) {
+        return true;
+    }
     const auto& frame = _animationFrames.at(_currentFrame);
 
     Point offsetPos = pos - offset();
-    if (!Rect::inRect(offsetPos, frame->size()))
-    {
+    if (!Rect::inRect(offsetPos, frame->size())) {
         return 0;
     }
     offsetPos +=frame->position();
@@ -262,4 +277,4 @@ bool Animation::opaque(const Point &pos) {
 }
 
 }
-}
+}  // namespace Falltergeist
